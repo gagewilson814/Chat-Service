@@ -21,7 +21,6 @@ public class ClientHandler implements Runnable {
     private String clientNickname = "";
     private Set<String> joinedChannels;
     private int totalMessagesFromOne;
-    // private Map<String, ClientHandler> clients;
 
     /**
      * Constructor for the ClientHandler.
@@ -38,7 +37,7 @@ public class ClientHandler implements Runnable {
             reader = new BufferedReader(new InputStreamReader(clientSocket.getInputStream()));
             writer = new PrintWriter(clientSocket.getOutputStream(), true);
         } catch (SocketException e) {
-            sendMessageToClient("See ya later");
+            sendMessageToClient("Goodbye!");
         } catch (IOException e) {
             e.printStackTrace();
         }
@@ -49,7 +48,12 @@ public class ClientHandler implements Runnable {
         try {
             sendMessageToClient("Welcome to the ChatServer, choose a name: ");
             String nameResponse = reader.readLine();
+            while (chatServer.isNicknameTaken(nameResponse)) {
+                sendMessageToClient("Nickname is already taken. Choose another");
+                nameResponse = reader.readLine();
+            }
             handleNickname(nameResponse);
+            handleHelp();
 
             String clientInput;
             while ((clientInput = reader.readLine()) != null) {
@@ -82,6 +86,19 @@ public class ClientHandler implements Runnable {
         try {
             PrintWriter clientWriter = new PrintWriter(clientSocket.getOutputStream(), true);
             clientWriter.println(message);
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+    }
+
+    public synchronized Socket getClientSocket() {
+        return clientSocket;
+    }
+
+    public synchronized void closeClient() {
+        try {
+            clientSocket.close();
+            System.exit(1);
         } catch (IOException e) {
             e.printStackTrace();
         }
@@ -124,6 +141,8 @@ public class ClientHandler implements Runnable {
     private synchronized void handleNickname(String nickname) {
         if (nickname == null || nickname.trim().isEmpty()) {
             sendMessageToClient("Invalid name. Choose another");
+        } else if (chatServer.isNicknameTaken(nickname)) {
+            sendMessageToClient("Nickname is already taken. Choose another");
         } else {
             sendMessageToClient("Nickname set to: " + nickname);
             clientNickname = nickname;
@@ -143,36 +162,15 @@ public class ClientHandler implements Runnable {
         } else if (command.startsWith("/leave")) {
             handleLeave(command.substring(7).trim());
         } else if (command.equals("/quit")) {
-            sendMessageToClient("See ya later bozo");
+            sendMessageToClient("Goodbye!");
             closeAll();
         } else if (command.equals("/help")) {
             handleHelp();
         } else if (command.equals("/list")) {
             handleList();
-        } else if (command.equals("/stats")) {
-            handleStats();
         } else {
             sendMessageToAll("[" + getCurrentChannel() + "] " + clientNickname + ": " + command);
         }
-    }
-
-    /*
-     * Prints more statistics from the server
-     */
-
-    private synchronized void handleStats() {
-        // list of connected clients
-        int totalClients = chatServer.getClients().size();
-        int totalChannels = chatServer.getChannelLists().size();
-        int totalMessagesFromOne = getMessageNum();
-        int totalMessages = chatServer.getTotalMessages();
-
-        String statsMessage = ("Total clients: " + totalClients + "\nTotal channels: " + totalChannels +
-                "\nTotal message from " + clientNickname + ": " + totalMessagesFromOne
-                + "\nTotal message from everone: "
-                + totalMessages);
-
-        sendMessageToClient(statsMessage);
     }
 
     /**
@@ -203,10 +201,8 @@ public class ClientHandler implements Runnable {
             channel = channel.toLowerCase();
             joinedChannels.add(channel);
             chatServer.addChannel(channel); // add channel to channelLists in ChatServer
-            // sendMessageToClient("Joined channel: " + channel);
             chatServer.broadcastMessage("User " + clientNickname + " has joined the channel: " + channel,
                     clientNickname, channel);
-            // System.out.println(joinedChannels);
         }
     }
 
@@ -224,24 +220,20 @@ public class ClientHandler implements Runnable {
         } else {
             sendMessageToAll("User " + clientNickname + " has left channel: " + channel);
             joinedChannels.remove(channel);
-            // chatServer.removeChannel(channel); // remove channel from channelLists in
-            // ChatServer
         }
     }
 
     /*
      * Manual for the user, technically a help message
      */
-    private void handleHelp() {
+    private synchronized void handleHelp() {
         sendMessageToClient("List of available commands: \n");
-        // sendMessageToClient("/connect <server-name> [port#]");
-        sendMessageToClient("/nick <nickname>");
-        sendMessageToClient("/list");
-        sendMessageToClient("/join <channel>");
-        sendMessageToClient("/leave [<channel>]");
-        sendMessageToClient("/quit");
-        sendMessageToClient("/help");
-        sendMessageToClient("/stats");
+        sendMessageToClient("/nick <nickname> - sets your nickname");
+        sendMessageToClient("/list - lists all available channels");
+        sendMessageToClient("/join <channel> - joins a channel");
+        sendMessageToClient("/leave [<channel>] - leaves a channel");
+        sendMessageToClient("/quit - quits the server");
+        sendMessageToClient("/help - displays this message");
     }
 
     /**
@@ -262,7 +254,7 @@ public class ClientHandler implements Runnable {
             writer.close();
             clientSocket.close();
         } catch (SocketException e) {
-            sendMessageToClient("See ya later");
+            sendMessageToClient("Goodbye!");
         } catch (IOException e) {
             e.printStackTrace();
         }

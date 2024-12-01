@@ -9,6 +9,8 @@ import java.util.concurrent.TimeUnit;
 import java.util.Collections;
 import java.util.List;
 import java.util.ArrayList;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.atomic.AtomicLong;
 
 public class ChatServer {
     private int port;
@@ -20,7 +22,11 @@ public class ChatServer {
     private List<ClientHandler> clients;
     private Set<String> channelLists;
     private int totalMessages;
-    private boolean serverActive;
+    private volatile boolean serverActive;
+
+    // Fields for idle shutdown
+    private final ScheduledExecutorService scheduler;
+    private final AtomicLong lastActivityTime;
 
     /*
      * Constructor for chat server
@@ -28,19 +34,26 @@ public class ChatServer {
     public ChatServer(int port, int debugLevel) {
         try {
             serverSocket = new ServerSocket(port);
-            threadPool = Executors.newFixedThreadPool(4);
-            this.clients = Collections.synchronizedList(new ArrayList<>()); // use a synchronized list
+            threadPool = Executors.newFixedThreadPool(6);
+            this.clients = Collections.synchronizedList(new ArrayList<>());
             channelLists = new HashSet<>();
             totalMessages = 0;
             serverActive = true;
             System.out.println("Starting up the server on port: " + port);
+
+            // Initialize idle shutdown fields
+            scheduler = Executors.newSingleThreadScheduledExecutor();
+            lastActivityTime = new AtomicLong(System.currentTimeMillis());
+            scheduler.scheduleAtFixedRate(this::checkIdle, 1, 1, TimeUnit.MINUTES);
+
         } catch (IOException e) {
             e.printStackTrace();
+            throw new RuntimeException("Failed to start the server on port: " + port);
         }
     }
 
     public void startServer() {
-        Runtime.getRuntime().addShutdownHook(new Thread(() -> closeServer()));
+        Runtime.getRuntime().addShutdownHook(new Thread(this::closeServer));
 
         while (serverActive) {
             try {
@@ -50,14 +63,25 @@ public class ChatServer {
                 threadPool.execute(clientHandler);
 
                 clients.add(clientHandler);
+                if (clientHandler.getClientNickname() != "" && debugLevel == 1) {
+                    System.out.println("Client connected: " + clientHandler.getClientNickname());
+                } else if (clientHandler.getClientNickname() == "" && debugLevel == 1) {
+                    System.out.println("Client connected: " + clientSocket.getInetAddress().getHostAddress());
+                }
+
+                // Update last activity time since a new client has connected
+                updateLastActivityTime();
+
             } catch (IOException e) {
-                e.printStackTrace();
+                if (serverActive) {
+                    e.printStackTrace();
+                }
             }
         }
     }
 
     /*
-     * get total clients in the server
+     * Get total clients in the server
      */
     public Set<ClientHandler> getClients() {
         synchronized (clients) {
@@ -66,7 +90,7 @@ public class ChatServer {
     }
 
     /*
-     * get total channel in the server
+     * Get total channels in the server
      */
     public synchronized Set<String> getChannelLists() {
         return new HashSet<>(channelLists);
@@ -80,12 +104,12 @@ public class ChatServer {
         channelLists.remove(channelName);
     }
 
-    // total messages in server
+    // Total messages in server
     public synchronized int getTotalMessages() {
         return totalMessages;
     }
 
-    // update
+    // Update total messages
     public synchronized void incrementTotalMessages() {
         totalMessages++;
     }
@@ -96,35 +120,111 @@ public class ChatServer {
                 clientHandler.sendMessageToClient(message);
             }
         }
+        // Increment total messages since broadcasting is considered activity
+        incrementTotalMessages();
+
+        // Update last activity time since a message has been sent
+        updateLastActivityTime();
     }
 
     public synchronized void removeClient(String clientNickname) {
-        clients.removeIf(clientHandler -> clientHandler.getClientNickname().equals(clientNickname));
+        clients.removeIf(clientHandler -> {
+            boolean toRemove = clientHandler.getClientNickname().equals(clientNickname);
+            if (toRemove && debugLevel == 1) {
+                System.out.println("Client disconnected: " + clientNickname);
+            } else if (!toRemove && debugLevel == 1) {
+                System.out.println("A client with no nickname disconnected: "
+                        + clientHandler.getClientSocket().getInetAddress().getHostAddress());
+            }
+            return toRemove;
+        });
+
+        // Update last activity time since a client has disconnected
+        updateLastActivityTime();
     }
 
     public synchronized boolean isServerActive() {
         return serverActive;
     }
 
+    public synchronized boolean isNicknameTaken(String nickname) {
+        for (ClientHandler clientHandler : clients) {
+            if (clientHandler.getClientNickname().equals(nickname)) {
+                System.out.println("Nickname " + nickname + " is already taken");
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /*
+     * Update the last activity timestamp to the current time
+     */
+    private void updateLastActivityTime() {
+        lastActivityTime.set(System.currentTimeMillis());
+        // For debugging purposes
+        if (debugLevel == 1) {
+            System.out.println("Last activity time updated to: " + lastActivityTime.get());
+        }
+    }
+
+    /*
+     * Check if the server has been idle and shut it down if necessary
+     */
+    private void checkIdle() {
+        long currentTime = System.currentTimeMillis();
+        long lastActivity = lastActivityTime.get();
+        long idleDuration = currentTime - lastActivity;
+
+        if (idleDuration > TIMEOUT) {
+            System.out.println("No activity for over three minutes. Shutting down.");
+            closeServer();
+        } else {
+            if (debugLevel == 1) {
+                System.out.println("Idle check: " + idleDuration + "ms since last activity.");
+            }
+        }
+    }
+
+    public synchronized int getDebugLevel() {
+        return debugLevel;
+    }
+
+    /*
+     * Close the server and release all resources
+     */
     private void closeServer() {
+        if (!serverActive) {
+            return; // Server is already shutting down
+        }
         serverActive = false;
         System.out.println("Closing down the server as requested");
 
-        for (ClientHandler clientHandler : clients) {
-            clientHandler.sendMessageToClient("Server is shutting down get out");
+        // Notify all clients about the shutdown
+        synchronized (clients) {
+            for (ClientHandler clientHandler : clients) {
+                clientHandler.sendMessageToClient("Server is shutting down. Goodbye! Type /quit to exit.");
+                clientHandler.closeClient();
+            }
         }
 
         threadPool.shutdown();
+        scheduler.shutdown();
         try {
             if (!threadPool.awaitTermination(10, TimeUnit.SECONDS)) {
                 threadPool.shutdownNow();
             }
+            if (!scheduler.awaitTermination(5, TimeUnit.SECONDS)) {
+                scheduler.shutdownNow();
+            }
         } catch (InterruptedException e) {
             e.printStackTrace();
             threadPool.shutdownNow();
+            scheduler.shutdownNow();
             Thread.currentThread().interrupt();
         }
 
+        // Close the server socket
         try {
             serverSocket.close();
         } catch (IOException e) {
@@ -146,5 +246,4 @@ public class ChatServer {
         ChatServer chatServer = new ChatServer(port, debugLevel);
         chatServer.startServer();
     }
-
 }

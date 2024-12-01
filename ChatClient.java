@@ -28,12 +28,12 @@ public class ChatClient {
     public void startClient() {
 
         System.out.println(
-                "You are not connected to any server. Use /connect <server IP> <server port #> to connect.");
+                "You are not connected to any server. Use /connect <server IP> [port # optional] to connect.");
 
         while (true) {
             String userInput = userInputScanner.nextLine();
             if ("/quit".equalsIgnoreCase(userInput)) {
-                System.out.println("k bye lol");
+                System.out.println("Goodbye!");
                 System.exit(0);
             }
             if ("/connect".equalsIgnoreCase(userInput.split(" ")[0])) {
@@ -61,25 +61,17 @@ public class ChatClient {
     private synchronized void handleConnectCommand(String userInput) {
         String[] commandParts = userInput.split(" ");
         if (commandParts.length < 2 || commandParts.length > 3) {
-            System.out.println("Usage: /connect server-name [#port]");
+            System.out.println("Usage: /connect <server-ip> [port # optional]");
             return;
         }
 
         String serverName = commandParts[1];
-        int port = commandParts.length == 3 ? Integer.parseInt(commandParts[2]) : 5156;
+        int port = commandParts.length == 3 ? Integer.parseInt(commandParts[2]) : 5000;
         try {
             socket = new Socket(serverName, port);
             inputReader = new BufferedReader(new InputStreamReader(socket.getInputStream()));
             outputWriter = new PrintWriter(socket.getOutputStream(), true);
             System.out.println("Connected to " + serverName + " on port " + port);
-            System.out.println("List of available commands: ");
-            System.out.println("/nick <nickname>");
-            System.out.println("/list");
-            System.out.println("/join <channel>");
-            System.out.println("/leave [<channel>]");
-            System.out.println("/quit");
-            System.out.println("/help");
-            System.out.println("/stats");
             listenToServer();
         } catch (IOException e) {
             e.printStackTrace();
