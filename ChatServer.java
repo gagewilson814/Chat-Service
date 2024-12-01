@@ -1,3 +1,9 @@
+
+/**
+ * ChatServer.java
+ * Represents the server in a chat application.
+ */
+
 import java.io.IOException;
 import java.net.ServerSocket;
 import java.net.Socket;
@@ -52,6 +58,9 @@ public class ChatServer {
         }
     }
 
+    /**
+     * Start the server and accept incoming connections
+     */
     public void startServer() {
         Runtime.getRuntime().addShutdownHook(new Thread(this::closeServer));
 
@@ -96,24 +105,47 @@ public class ChatServer {
         return new HashSet<>(channelLists);
     }
 
+    /**
+     * Add a channel to the server
+     * 
+     * @param channelName the name of the channel
+     */
     public synchronized void addChannel(String channelName) {
         channelLists.add(channelName);
     }
 
+    /**
+     * Remove a channel from the server
+     * 
+     * @param channelName the name of the channel
+     */
     public synchronized void removeChannel(String channelName) {
         channelLists.remove(channelName);
     }
 
-    // Total messages in server
+    /**
+     * Get the total number of messages sent
+     * 
+     * @return the total number of messages
+     */
     public synchronized int getTotalMessages() {
         return totalMessages;
     }
 
-    // Update total messages
+    /**
+     * Increment the total number of messages sent
+     */
     public synchronized void incrementTotalMessages() {
         totalMessages++;
     }
 
+    /**
+     * Broadcast a message to all clients in a channel
+     * 
+     * @param message        the message to broadcast
+     * @param senderNickname the nickname of the sender
+     * @param channel        the channel to broadcast to
+     */
     public synchronized void broadcastMessage(String message, String senderNickname, String channel) {
         for (ClientHandler clientHandler : clients) {
             if (clientHandler.isInChannel(channel)) {
@@ -127,6 +159,11 @@ public class ChatServer {
         updateLastActivityTime();
     }
 
+    /**
+     * Remove a client from the server
+     * 
+     * @param clientNickname the nickname of the client to remove
+     */
     public synchronized void removeClient(String clientNickname) {
         clients.removeIf(clientHandler -> {
             boolean toRemove = clientHandler.getClientNickname().equals(clientNickname);
@@ -143,10 +180,21 @@ public class ChatServer {
         updateLastActivityTime();
     }
 
+    /**
+     * Check if server is active
+     * 
+     * @return true if server is active, false otherwise
+     */
     public synchronized boolean isServerActive() {
         return serverActive;
     }
 
+    /**
+     * Check if a nickname is already taken
+     * 
+     * @param nickname the nickname to check
+     * @return true if nickname is taken, false otherwise
+     */
     public synchronized boolean isNicknameTaken(String nickname) {
         for (ClientHandler clientHandler : clients) {
             if (clientHandler.getClientNickname().equals(nickname)) {
@@ -186,6 +234,11 @@ public class ChatServer {
         }
     }
 
+    /**
+     * Get the debug level of the server
+     * 
+     * @return the debug level
+     */
     public synchronized int getDebugLevel() {
         return debugLevel;
     }
@@ -234,6 +287,11 @@ public class ChatServer {
         System.out.println("ChatServer has been completely shut down");
     }
 
+    /**
+     * Main method to start the chat server
+     * 
+     * @param args command line arguments
+     */
     public static void main(String[] args) {
         if (args.length != 4 || !args[0].equals("-p") || !args[2].equals("-d")) {
             System.out.println("Usage: java ChatServer -p <port#> -d <debug level>");

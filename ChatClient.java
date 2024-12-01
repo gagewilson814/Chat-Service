@@ -1,7 +1,9 @@
 
 /**
+ * ChatClient.java
  * Represents the client in a chat server.
  */
+
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
@@ -95,6 +97,11 @@ public class ChatClient {
         serverListen.start();
     }
 
+    /**
+     * Main method to run the client
+     * 
+     * @param args command line arguments
+     */
     public static void main(String[] args) {
         ChatClient chatClient = new ChatClient();
         chatClient.startClient();

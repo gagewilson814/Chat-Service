@@ -1,5 +1,6 @@
 
 /**
+ * ClientHandler.java
  * Handles the client commands for the chat server.
  */
 
