@@ -54,6 +54,7 @@ public class ClientHandler implements Runnable {
                 nameResponse = reader.readLine();
             }
             handleNickname(nameResponse);
+            handleJoin("general");
             handleHelp();
 
             String clientInput;
@@ -156,21 +157,47 @@ public class ClientHandler implements Runnable {
      * @param command the command being supplied
      */
     private synchronized void handleClientCommand(String command) {
-        if (command.startsWith("/nick")) {
-            handleNickname(command.substring(6).trim());
-        } else if (command.startsWith("/join")) {
-            handleJoin(command.substring(6).trim());
-        } else if (command.startsWith("/leave")) {
-            handleLeave(command.substring(7).trim());
-        } else if (command.equals("/quit")) {
-            sendMessageToClient("Goodbye!");
-            closeAll();
-        } else if (command.equals("/help")) {
-            handleHelp();
-        } else if (command.equals("/list")) {
-            handleList();
-        } else {
-            sendMessageToAll("[" + getCurrentChannel() + "] " + clientNickname + ": " + command);
+        String[] tokens = command.trim().split("\\s+", 2);
+        String cmd = tokens[0].toLowerCase();
+        String argument = tokens.length > 1 ? tokens[1].trim() : "";
+
+        switch (cmd) {
+            case "/nick":
+                if (!argument.isEmpty()) {
+                    handleNickname(argument);
+                } else {
+                    sendMessageToClient("Usage: /nick <nickname>");
+                }
+                break;
+
+            case "/join":
+                if (!argument.isEmpty()) {
+                    handleJoin(argument);
+                } else {
+                    sendMessageToClient("Usage: /join <channel>");
+                }
+                break;
+
+            case "/leave":
+                handleLeave(argument);
+                break;
+
+            case "/quit":
+                sendMessageToClient("Goodbye!");
+                closeAll();
+                break;
+
+            case "/help":
+                handleHelp();
+                break;
+
+            case "/list":
+                handleList();
+                break;
+
+            default:
+                sendMessageToAll("[" + getCurrentChannel() + "] " + clientNickname + ": " + command);
+                break;
         }
     }
 
@@ -215,17 +242,31 @@ public class ClientHandler implements Runnable {
     private synchronized void handleLeave(String channel) {
         if (channel.isEmpty()) {
             String currentChannel = getCurrentChannel();
+            if (currentChannel.equals("general")) {
+                sendMessageToClient("You cannot leave the default 'general' channel.");
+                return;
+            }
             sendMessageToAll("User " + clientNickname + " has left channel: " + currentChannel);
             joinedChannels.remove(currentChannel);
-            chatServer.removeChannel(currentChannel);
+            chatServer.removeChannelIfEmpty(currentChannel);
         } else {
-            sendMessageToAll("User " + clientNickname + " has left channel: " + channel);
-            joinedChannels.remove(channel);
+            channel = channel.toLowerCase();
+            if (channel.equals("general")) {
+                sendMessageToClient("You cannot leave the default 'general' channel.");
+                return;
+            }
+            if (joinedChannels.contains(channel)) {
+                sendMessageToAll("User " + clientNickname + " has left channel: " + channel);
+                joinedChannels.remove(channel);
+                chatServer.removeChannelIfEmpty(channel);
+            } else {
+                sendMessageToClient("You are not in the channel: " + channel);
+            }
         }
     }
 
     /*
-     * Manual for the user, technically a help message
+     * Help message for the client
      */
     private synchronized void handleHelp() {
         sendMessageToClient("List of available commands: \n");

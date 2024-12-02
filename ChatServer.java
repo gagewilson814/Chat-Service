@@ -92,7 +92,7 @@ public class ChatServer {
     /*
      * Get total clients in the server
      */
-    public Set<ClientHandler> getClients() {
+    public synchronized Set<ClientHandler> getClients() {
         synchronized (clients) {
             return new HashSet<>(clients);
         }
@@ -181,6 +181,53 @@ public class ChatServer {
     }
 
     /**
+     * Removes the specified channel from the server if it has no active members.
+     * 
+     * @param channelName the name of the channel to potentially remove
+     */
+    public synchronized void removeChannelIfEmpty(String channelName) {
+        // Normalize the channel name to ensure consistency
+        String normalizedChannel = channelName.toLowerCase();
+
+        // Prevent removal of the default 'general' channel
+        if (normalizedChannel.equals("general")) {
+            if (debugLevel == 1) {
+                System.out.println("Attempted to remove the default 'general' channel. Operation skipped.");
+            }
+            return;
+        }
+
+        // Check if any client is still in the channel
+        boolean isEmpty = true;
+        for (ClientHandler client : clients) {
+            if (client.isInChannel(normalizedChannel)) {
+                isEmpty = false;
+                break;
+            }
+        }
+
+        // If the channel is empty, remove it from the channel list
+        if (isEmpty) {
+            boolean removed = channelLists.remove(normalizedChannel);
+            if (removed) {
+                System.out.println("Channel '" + normalizedChannel + "' has been removed as it is now empty.");
+                // Optionally, notify all clients about the channel removal
+                broadcastMessage("Channel '" + normalizedChannel + "' has been removed as it is now empty.", "Server",
+                        normalizedChannel);
+            } else {
+                if (debugLevel == 1) {
+                    System.out.println("Attempted to remove channel '" + normalizedChannel
+                            + "', but it was not found in the channel list.");
+                }
+            }
+        } else {
+            if (debugLevel == 1) {
+                System.out.println("Channel '" + normalizedChannel + "' is not empty. Removal skipped.");
+            }
+        }
+    }
+
+    /**
      * Check if server is active
      * 
      * @return true if server is active, false otherwise
@@ -208,9 +255,8 @@ public class ChatServer {
     /*
      * Update the last activity timestamp to the current time
      */
-    private void updateLastActivityTime() {
+    private synchronized void updateLastActivityTime() {
         lastActivityTime.set(System.currentTimeMillis());
-        // For debugging purposes
         if (debugLevel == 1) {
             System.out.println("Last activity time updated to: " + lastActivityTime.get());
         }
@@ -219,7 +265,7 @@ public class ChatServer {
     /*
      * Check if the server has been idle and shut it down if necessary
      */
-    private void checkIdle() {
+    private synchronized void checkIdle() {
         long currentTime = System.currentTimeMillis();
         long lastActivity = lastActivityTime.get();
         long idleDuration = currentTime - lastActivity;
@@ -246,9 +292,9 @@ public class ChatServer {
     /*
      * Close the server and release all resources
      */
-    private void closeServer() {
+    private synchronized void closeServer() {
         if (!serverActive) {
-            return; // Server is already shutting down
+            return;
         }
         serverActive = false;
         System.out.println("Closing down the server as requested");
