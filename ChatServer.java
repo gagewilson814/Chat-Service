@@ -148,14 +148,11 @@ public class ChatServer {
      */
     public synchronized void broadcastMessage(String message, String senderNickname, String channel) {
         for (ClientHandler clientHandler : clients) {
-            if (clientHandler.isInChannel(channel)) {
+            if (clientHandler.getChannel().equals(channel)) {
                 clientHandler.sendMessageToClient(message);
             }
         }
-        // Increment total messages since broadcasting is considered activity
         incrementTotalMessages();
-
-        // Update last activity time since a message has been sent
         updateLastActivityTime();
     }
 

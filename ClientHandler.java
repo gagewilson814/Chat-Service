@@ -10,8 +10,6 @@ import java.io.InputStreamReader;
 import java.io.PrintWriter;
 import java.net.Socket;
 import java.net.SocketException;
-import java.util.HashSet;
-import java.util.Set;
 
 public class ClientHandler implements Runnable {
 
@@ -20,19 +18,20 @@ public class ClientHandler implements Runnable {
     private PrintWriter writer;
     private ChatServer chatServer;
     private String clientNickname = "";
-    private Set<String> joinedChannels;
+    private String currentChannel;
     private int totalMessagesFromOne;
 
     /**
      * Constructor for the ClientHandler.
-     * 
+     *
      * @param clientSocket the socket of the client
      * @param chatServer   the chat server object
      */
     public ClientHandler(Socket clientSocket, ChatServer chatServer) {
         this.clientSocket = clientSocket;
         this.chatServer = chatServer;
-        this.joinedChannels = new HashSet<>();
+        this.currentChannel = "general"; // Initialize current channel
+        chatServer.addChannel("general"); // Ensure general channel exists
 
         try {
             reader = new BufferedReader(new InputStreamReader(clientSocket.getInputStream()));
@@ -54,7 +53,6 @@ public class ClientHandler implements Runnable {
                 nameResponse = reader.readLine();
             }
             handleNickname(nameResponse);
-            handleJoin("general");
             handleHelp();
 
             String clientInput;
@@ -71,8 +69,8 @@ public class ClientHandler implements Runnable {
     }
 
     /**
-     * Simply returns the clients nickname
-     * 
+     * Simply returns the client's nickname
+     *
      * @return client's nickname
      */
     public synchronized String getClientNickname() {
@@ -80,21 +78,24 @@ public class ClientHandler implements Runnable {
     }
 
     /**
-     * Sends a message just the client (no other clients see this message)
-     * 
+     * Sends a message just to the client (no other clients see this message)
+     *
      * @param message the message to send to client
      */
     public synchronized void sendMessageToClient(String message) {
         try {
-            PrintWriter clientWriter = new PrintWriter(clientSocket.getOutputStream(), true);
-            clientWriter.println(message);
-        } catch (IOException e) {
+            writer.println(message);
+        } catch (Exception e) {
             e.printStackTrace();
         }
     }
 
     public synchronized Socket getClientSocket() {
         return clientSocket;
+    }
+
+    public synchronized String getChannel() {
+        return getCurrentChannel();
     }
 
     public synchronized void closeClient() {
@@ -107,18 +108,18 @@ public class ClientHandler implements Runnable {
     }
 
     /**
-     * Checks if there is a channel.
-     * 
+     * Checks if the client is in a channel.
+     *
      * @param channel the channel name
-     * @return true if channel exists, false otherwise
+     * @return true if client is in the channel, false otherwise
      */
     public synchronized boolean isInChannel(String channel) {
-        return joinedChannels.contains(channel.toLowerCase());
+        return currentChannel.equalsIgnoreCase(channel);
     }
 
     /**
-     * Sends a message to all clients.
-     * 
+     * Sends a message to all clients in the current channel.
+     *
      * @param message message to send to all clients
      */
     public synchronized void sendMessageToAll(String message) {
@@ -129,7 +130,7 @@ public class ClientHandler implements Runnable {
 
     /**
      * get message number for /stats command
-     * 
+     *
      */
     public synchronized int getMessageNum() {
         return totalMessagesFromOne;
@@ -137,7 +138,7 @@ public class ClientHandler implements Runnable {
 
     /**
      * Handles the setting of a nickname on the chat server
-     * 
+     *
      * @param nickname the nickname to set to
      */
     private synchronized void handleNickname(String nickname) {
@@ -153,7 +154,7 @@ public class ClientHandler implements Runnable {
 
     /**
      * Handles the various client commands able to be used on the chat server
-     * 
+     *
      * @param command the command being supplied
      */
     private synchronized void handleClientCommand(String command) {
@@ -179,7 +180,7 @@ public class ClientHandler implements Runnable {
                 break;
 
             case "/leave":
-                handleLeave(argument);
+                handleLeave();
                 break;
 
             case "/quit":
@@ -202,7 +203,7 @@ public class ClientHandler implements Runnable {
     }
 
     /**
-     * Prints a list of the connected clients, and the channels on the server.
+     * Prints a list of the connected clients and the channels on the server.
      */
     private synchronized void handleList() {
         // list of connected clients
@@ -219,7 +220,7 @@ public class ClientHandler implements Runnable {
 
     /**
      * Handles the joining of a client to a channel
-     * 
+     *
      * @param channel the channel to join
      */
     private synchronized void handleJoin(String channel) {
@@ -227,42 +228,37 @@ public class ClientHandler implements Runnable {
             sendMessageToClient("Invalid channel, choose a different one");
         } else {
             channel = channel.toLowerCase();
-            joinedChannels.add(channel);
+
+            // Leave the current channel
+            sendMessageToAll("User " + clientNickname + " has left the channel: " + currentChannel);
+            chatServer.removeChannelIfEmpty(currentChannel);
+
+            // Update current channel
+            currentChannel = channel;
             chatServer.addChannel(channel); // add channel to channelLists in ChatServer
+            sendMessageToClient("You have joined channel: " + channel);
             chatServer.broadcastMessage("User " + clientNickname + " has joined the channel: " + channel,
                     clientNickname, channel);
         }
     }
 
     /**
-     * Handles a client leaving a channel
-     * 
-     * @param channel channel to leave
+     * Handles a client leaving their current channel
      */
-    private synchronized void handleLeave(String channel) {
-        if (channel.isEmpty()) {
-            String currentChannel = getCurrentChannel();
-            if (currentChannel.equals("general")) {
-                sendMessageToClient("You cannot leave the default 'general' channel.");
-                return;
-            }
-            sendMessageToAll("User " + clientNickname + " has left channel: " + currentChannel);
-            joinedChannels.remove(currentChannel);
-            chatServer.removeChannelIfEmpty(currentChannel);
-        } else {
-            channel = channel.toLowerCase();
-            if (channel.equals("general")) {
-                sendMessageToClient("You cannot leave the default 'general' channel.");
-                return;
-            }
-            if (joinedChannels.contains(channel)) {
-                sendMessageToAll("User " + clientNickname + " has left channel: " + channel);
-                joinedChannels.remove(channel);
-                chatServer.removeChannelIfEmpty(channel);
-            } else {
-                sendMessageToClient("You are not in the channel: " + channel);
-            }
+    private synchronized void handleLeave() {
+        if (currentChannel.equals("general")) {
+            sendMessageToClient("You cannot leave the default 'general' channel.");
+            return;
         }
+        sendMessageToAll("User " + clientNickname + " has left the channel: " + currentChannel);
+        chatServer.removeChannelIfEmpty(currentChannel);
+
+        // Set current channel to 'general'
+        currentChannel = "general";
+        chatServer.addChannel("general");
+        sendMessageToClient("You have joined channel: general");
+        chatServer.broadcastMessage("User " + clientNickname + " has joined the channel: general",
+                clientNickname, "general");
     }
 
     /*
@@ -273,18 +269,18 @@ public class ClientHandler implements Runnable {
         sendMessageToClient("/nick <nickname> - sets your nickname");
         sendMessageToClient("/list - lists all available channels");
         sendMessageToClient("/join <channel> - joins a channel");
-        sendMessageToClient("/leave [<channel>] - leaves a channel");
+        sendMessageToClient("/leave - leaves the current channel");
         sendMessageToClient("/quit - quits the server");
         sendMessageToClient("/help - displays this message");
     }
 
     /**
      * Gets the current channel and returns it
-     * 
+     *
      * @return the current channel
      */
     private synchronized String getCurrentChannel() {
-        return joinedChannels.isEmpty() ? "general" : joinedChannels.iterator().next();
+        return currentChannel;
     }
 
     /**
