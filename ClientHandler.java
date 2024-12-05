@@ -39,7 +39,7 @@ public class ClientHandler implements Runnable {
         } catch (SocketException e) {
             sendMessageToClient("Goodbye!");
         } catch (IOException e) {
-            e.printStackTrace();
+            sendMessageToClient("Goodbye!");
         }
     }
 
@@ -103,7 +103,7 @@ public class ClientHandler implements Runnable {
         try {
             writer.println(message);
         } catch (Exception e) {
-            e.printStackTrace();
+            System.err.println("An error occured while sending message to client: " + e.getMessage());
         }
     }
 
@@ -119,7 +119,7 @@ public class ClientHandler implements Runnable {
         try {
             clientSocket.close();
         } catch (IOException e) {
-            e.printStackTrace();
+            System.err.println("An error occured while closing client: " + e.getMessage());
         }
     }
 
@@ -310,7 +310,7 @@ public class ClientHandler implements Runnable {
         } catch (SocketException e) {
             sendMessageToClient("Goodbye!");
         } catch (IOException e) {
-            e.printStackTrace();
+            sendMessageToClient("Goodbye!");
         }
     }
 }
