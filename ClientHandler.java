@@ -101,7 +101,6 @@ public class ClientHandler implements Runnable {
     public synchronized void closeClient() {
         try {
             clientSocket.close();
-            System.exit(1);
         } catch (IOException e) {
             e.printStackTrace();
         }
