@@ -44,6 +44,9 @@ public class ClientHandler implements Runnable {
     }
 
     @Override
+    /**
+     * Run method for the ClientHandler thread.
+     */
     public void run() {
         try {
             sendMessageToClient("Welcome to the ChatServer, choose a name: ");
@@ -59,12 +62,26 @@ public class ClientHandler implements Runnable {
             while ((clientInput = reader.readLine()) != null) {
                 handleClientCommand(clientInput);
             }
+        } catch (SocketException e) {
+            handleClientDisconnection(e);
         } catch (IOException e) {
-            e.printStackTrace();
+            handleClientDisconnection(e);
         } finally {
             chatServer.removeClient(clientNickname);
             sendMessageToAll(clientNickname + " has left the server");
             closeAll();
+        }
+    }
+
+    /**
+     * Handles the disconnection of a client from the server
+     * 
+     * @param e the exception that caused the disconnection
+     */
+    private void handleClientDisconnection(Exception e) {
+        String clientIdentifier = clientNickname.isEmpty() ? clientSocket.getInetAddress().toString() : clientNickname;
+        if (chatServer.getDebugLevel() == 1) {
+            System.out.println("Client " + clientIdentifier + " disconnected.");
         }
     }
 

@@ -29,8 +29,6 @@ public class ChatServer {
     private Set<String> channelLists;
     private int totalMessages;
     private volatile boolean serverActive;
-
-    // Fields for idle shutdown
     private final ScheduledExecutorService scheduler;
     private final AtomicLong lastActivityTime;
 
@@ -45,9 +43,10 @@ public class ChatServer {
             channelLists = new HashSet<>();
             totalMessages = 0;
             serverActive = true;
+            this.debugLevel = debugLevel;
+            this.port = port;
             System.out.println("Starting up the server on port: " + port);
 
-            // Initialize idle shutdown fields
             scheduler = Executors.newSingleThreadScheduledExecutor();
             lastActivityTime = new AtomicLong(System.currentTimeMillis());
             scheduler.scheduleAtFixedRate(this::checkIdle, 1, 1, TimeUnit.MINUTES);
@@ -72,9 +71,9 @@ public class ChatServer {
                 threadPool.execute(clientHandler);
 
                 clients.add(clientHandler);
-                if (clientHandler.getClientNickname() != "" && debugLevel == 1) {
+                if (clientHandler.getClientNickname() != "" && debugLevel == 0 || debugLevel == 1) {
                     System.out.println("Client connected: " + clientHandler.getClientNickname());
-                } else if (clientHandler.getClientNickname() == "" && debugLevel == 1) {
+                } else if (clientHandler.getClientNickname() == "" && debugLevel == 0 || debugLevel == 1) {
                     System.out.println("Client connected: " + clientSocket.getInetAddress().getHostAddress());
                 }
 
@@ -82,7 +81,7 @@ public class ChatServer {
                 updateLastActivityTime();
 
             } catch (IOException e) {
-                if (serverActive) {
+                if (serverActive && debugLevel == 1) {
                     e.printStackTrace();
                 }
             }
@@ -164,9 +163,9 @@ public class ChatServer {
     public synchronized void removeClient(String clientNickname) {
         clients.removeIf(clientHandler -> {
             boolean toRemove = clientHandler.getClientNickname().equals(clientNickname);
-            if (toRemove && debugLevel == 1) {
+            if (toRemove && debugLevel == 1 || debugLevel == 0 && toRemove) {
                 System.out.println("Client disconnected: " + clientNickname);
-            } else if (!toRemove && debugLevel == 1) {
+            } else if (!toRemove && debugLevel == 0 || debugLevel == 1 && toRemove) {
                 System.out.println("A client with no nickname disconnected: "
                         + clientHandler.getClientSocket().getInetAddress().getHostAddress());
             }
@@ -183,12 +182,10 @@ public class ChatServer {
      * @param channelName the name of the channel to potentially remove
      */
     public synchronized void removeChannelIfEmpty(String channelName) {
-        // Normalize the channel name to ensure consistency
         String normalizedChannel = channelName.toLowerCase();
 
-        // Prevent removal of the default 'general' channel
         if (normalizedChannel.equals("general")) {
-            if (debugLevel == 1) {
+            if (debugLevel == 1 || debugLevel == 0) {
                 System.out.println("Attempted to remove the default 'general' channel. Operation skipped.");
             }
             return;
@@ -208,7 +205,6 @@ public class ChatServer {
             boolean removed = channelLists.remove(normalizedChannel);
             if (removed) {
                 System.out.println("Channel '" + normalizedChannel + "' has been removed as it is now empty.");
-                // Optionally, notify all clients about the channel removal
                 broadcastMessage("Channel '" + normalizedChannel + "' has been removed as it is now empty.", "Server",
                         normalizedChannel);
             } else {
@@ -254,7 +250,7 @@ public class ChatServer {
      */
     private synchronized void updateLastActivityTime() {
         lastActivityTime.set(System.currentTimeMillis());
-        if (debugLevel == 1) {
+        if (debugLevel == 1 || debugLevel == 0) {
             System.out.println("Last activity time updated to: " + lastActivityTime.get());
         }
     }
@@ -271,7 +267,7 @@ public class ChatServer {
             System.out.println("No activity for over three minutes. Shutting down.");
             closeServer();
         } else {
-            if (debugLevel == 1) {
+            if (debugLevel == 1 || debugLevel == 0) {
                 System.out.println("Idle check: " + idleDuration + "ms since last activity.");
             }
         }
@@ -314,17 +310,20 @@ public class ChatServer {
                 scheduler.shutdownNow();
             }
         } catch (InterruptedException e) {
-            e.printStackTrace();
+            if (debugLevel == 1) {
+                e.printStackTrace();
+            }
             threadPool.shutdownNow();
             scheduler.shutdownNow();
             Thread.currentThread().interrupt();
         }
 
-        // Close the server socket
         try {
             serverSocket.close();
         } catch (IOException e) {
-            e.printStackTrace();
+            if (debugLevel == 1) {
+                e.printStackTrace();
+            }
         }
 
         System.out.println("ChatServer has been completely shut down");
