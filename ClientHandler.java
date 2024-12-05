@@ -30,8 +30,8 @@ public class ClientHandler implements Runnable {
     public ClientHandler(Socket clientSocket, ChatServer chatServer) {
         this.clientSocket = clientSocket;
         this.chatServer = chatServer;
-        this.currentChannel = "general"; // Initialize current channel
-        chatServer.addChannel("general"); // Ensure general channel exists
+        this.currentChannel = "general";
+        chatServer.addChannel("general");
 
         try {
             reader = new BufferedReader(new InputStreamReader(clientSocket.getInputStream()));
@@ -125,7 +125,7 @@ public class ClientHandler implements Runnable {
     public synchronized void sendMessageToAll(String message) {
         chatServer.broadcastMessage(message, clientNickname, getCurrentChannel());
         totalMessagesFromOne++;
-        chatServer.incrementTotalMessages(); // Increment total messages count in ChatServer
+        chatServer.incrementTotalMessages();
     }
 
     /**
@@ -235,7 +235,7 @@ public class ClientHandler implements Runnable {
 
             // Update current channel
             currentChannel = channel;
-            chatServer.addChannel(channel); // add channel to channelLists in ChatServer
+            chatServer.addChannel(channel);
             sendMessageToClient("You have joined channel: " + channel);
             chatServer.broadcastMessage("User " + clientNickname + " has joined the channel: " + channel,
                     clientNickname, channel);
