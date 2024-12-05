@@ -27,7 +27,6 @@ public class ChatServer {
     private ExecutorService threadPool;
     private List<ClientHandler> clients;
     private Set<String> channelLists;
-    private int totalMessages;
     private volatile boolean serverActive;
     private final ScheduledExecutorService scheduler;
     private final AtomicLong lastActivityTime;
@@ -41,7 +40,6 @@ public class ChatServer {
             threadPool = Executors.newFixedThreadPool(6);
             this.clients = Collections.synchronizedList(new ArrayList<>());
             channelLists = new HashSet<>();
-            totalMessages = 0;
             serverActive = true;
             this.debugLevel = debugLevel;
             this.port = port;
@@ -123,22 +121,6 @@ public class ChatServer {
     }
 
     /**
-     * Get the total number of messages sent
-     * 
-     * @return the total number of messages
-     */
-    public synchronized int getTotalMessages() {
-        return totalMessages;
-    }
-
-    /**
-     * Increment the total number of messages sent
-     */
-    public synchronized void incrementTotalMessages() {
-        totalMessages++;
-    }
-
-    /**
      * Broadcast a message to all clients in a channel
      * 
      * @param message        the message to broadcast
@@ -151,7 +133,6 @@ public class ChatServer {
                 clientHandler.sendMessageToClient(message);
             }
         }
-        incrementTotalMessages();
         updateLastActivityTime();
     }
 

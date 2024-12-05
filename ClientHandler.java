@@ -19,7 +19,6 @@ public class ClientHandler implements Runnable {
     private ChatServer chatServer;
     private String clientNickname = "";
     private String currentChannel;
-    private int totalMessagesFromOne;
 
     /**
      * Constructor for the ClientHandler.
@@ -140,16 +139,6 @@ public class ClientHandler implements Runnable {
      */
     public synchronized void sendMessageToAll(String message) {
         chatServer.broadcastMessage(message, clientNickname, getCurrentChannel());
-        totalMessagesFromOne++;
-        chatServer.incrementTotalMessages();
-    }
-
-    /**
-     * get message number for /stats command
-     *
-     */
-    public synchronized int getMessageNum() {
-        return totalMessagesFromOne;
     }
 
     /**
