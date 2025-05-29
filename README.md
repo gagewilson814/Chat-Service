@@ -41,9 +41,6 @@ The port is optional, if a server is running on port 5000 you don't have to spec
 ## Testing methodology:
 - Testing involved incrementally developing the code and then running it. Once I got multithreading implemented, I started connecting multiple clients to the server in order to test it. Honestly, that's the only thing I did to test the code, was just constantly running it as I made small changes.
 
-## Observations/Reflection:
-- This project was pretty tough to take on alone. I had to learn and refresh myself on a lot of different topics in order to get this working correctly. I spent anytime that I was bored over thanksgiving break on reading information and learning in order to complete this project. I found that doing the single-threaded version was very easy to do honestly, but once I started incorporating multithreading and learning about that, it got much harder. I think this project was a great experience, and honestly I'm glad I did it without partners as often times working with a group is more of a hassle than it's worth from my experience in school. I'm interested to learn more about multi-threading and applications of it to use on projects in the future.
-
 ## Sources used
 [Multithreading in Java](https://www.tutorialspoint.com/java/java_multithreading.htm)
 
